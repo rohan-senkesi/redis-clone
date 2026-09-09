@@ -1,5 +1,6 @@
 import socket
 import threading
+import time
 
 
 store = {}
@@ -59,18 +60,33 @@ def handle_client(connection):
 
         elif command == "SET":
             key, value = args[1], args[2]
+            expiry_at = None
+
+            # Check for optional PX argument
+            if len(args) >= 5 and args[3].upper() == "PX":
+                px_ms = int(args[4])
+                expiry_at = time.monotonic() + (px_ms / 1000)
+
             with store_lock:
-                store[key] = value
+                store[key] = (value, expiry_at)
             connection.sendall(encode_simple_string("OK"))
 
         elif command == "GET":
             key = args[1]
             with store_lock:
-                value = store.get(key)
-            if value is None:
+                entry = store.get(key)
+
+            if entry is None:
                 connection.sendall(encode_null_bulk_string())
             else:
-                connection.sendall(encode_bulk_string(value))
+                value, expiry_at = entry
+                if expiry_at is not None and time.monotonic() > expiry_at:
+                    # Expired — remove it and respond as if missing
+                    with store_lock:
+                        store.pop(key, None)
+                    connection.sendall(encode_null_bulk_string())
+                else:
+                    connection.sendall(encode_bulk_string(value))
 
     connection.close()
 
