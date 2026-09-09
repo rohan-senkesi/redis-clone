@@ -7,6 +7,7 @@ def send_command(*parts):
     print("Sent:", parts, "-> Got:", s.recv(1024))
     s.close()
 
-send_command("PING")
-send_command("ECHO", "hey")
-send_command("echo", "randomStringHere")  # test case-insensitivity
+send_command("SET", "foo", "bar")
+send_command("GET", "foo")
+send_command("GET", "nonexistent_key")
+
